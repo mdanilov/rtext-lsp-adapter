@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import * as crypto from 'crypto';
 
 import { Config, ServiceConfig } from './config'
-import { config } from 'process';
 
 export interface ConnectorConstructor {
     new (config: ServiceConfig, data?: any): ConnectorInterface
@@ -28,11 +27,11 @@ export class ConnectorManager {
     }
 
     public connectorForFile(file: string, data?: any): ConnectorInterface | undefined {
-        let config = Config.find_service_config(file);
+        const config = Config.find_service_config(file);
         if (config) {
-            let filePattern = Config.file_pattern(file);
-            let key = this.descKey(config, filePattern);
-            let desc = this._connectorDescs.get(key);
+            const filePattern = Config.file_pattern(file);
+            const key = this.descKey(config, filePattern);
+            const desc = this._connectorDescs.get(key);
             if (desc) {
                 if (desc.checksum == this.configChecksum(config)) {
                     return desc.connector;
@@ -47,7 +46,7 @@ export class ConnectorManager {
     }
 
     public allConnectors(): ConnectorInterface[] {
-        let cons: ConnectorInterface[] = [];
+        const cons: ConnectorInterface[] = [];
         this._connectorDescs.forEach((desc: ConnectorDesc) => {
             cons.push(desc.connector);
         });
@@ -55,9 +54,9 @@ export class ConnectorManager {
     }
 
     private createConnector(config: ServiceConfig, pattern: string, data?: any): ConnectorInterface {
-        let key = this.descKey(config, pattern);
-        let con = new this._connectorCtor(config, data);
-        let desc: ConnectorDesc = { connector: con, checksum: this.configChecksum(config) };
+        const key = this.descKey(config, pattern);
+        const con = new this._connectorCtor(config, data);
+        const desc: ConnectorDesc = { connector: con, checksum: this.configChecksum(config) };
         this._connectorDescs.set(key, desc);
         return desc.connector;
     }
@@ -68,7 +67,7 @@ export class ConnectorManager {
 
     private configChecksum(config: ServiceConfig): string | undefined {
         if (fs.existsSync(config.file)) {
-            let sha1 = crypto.createHash('sha1');
+            const sha1 = crypto.createHash('sha1');
             sha1.update(fs.readFileSync(config.file));
             return sha1.digest('hex');
         }

@@ -11,8 +11,8 @@ import { ServiceConfig } from "./config";
 import { ConnectorInterface } from "./connectorManager";
 
 class PendingRequest {
-    public invocationId: number = 0;
-    public command: string = "";
+    public invocationId = 0;
+    public command = "";
     public progressCallback?: Function;
     public resolveFunc: Function = () => { };
 }
@@ -35,7 +35,7 @@ export class Client implements ConnectorInterface {
     private _keepAliveTask?: NodeJS.Timeout;
     private _rtextService?: RTextService;
     private _responseData: Buffer = Buffer.alloc(0);
-    private static LOCALHOST: string = "127.0.0.1";
+    private static LOCALHOST = "127.0.0.1";
 
     constructor(config: ServiceConfig) {
         this.config = config;
@@ -81,7 +81,7 @@ export class Client implements ConnectorInterface {
         return this.send({ command: "find_elements", pattern: pattern });
     }
 
-    public stop() {
+    public stop(): void {
         if (this._reconnectTimeout)
             clearTimeout(this._reconnectTimeout);
         this.stopService();
@@ -97,7 +97,7 @@ export class Client implements ConnectorInterface {
         return this.send({ command: "load_model" }, progressCallback);
     }
 
-    public stopService() {
+    public stopService(): void {
         this.send({ command: "stop" });
     }
 
@@ -203,9 +203,9 @@ export class Client implements ConnectorInterface {
             const configCommand = this.transformCommand(config.command.trim());
             const command = configCommand.split(' ')[0];
             const args = configCommand.split(' ').slice(1);
-            let cwd = path.dirname(config.file);
+            const cwd = path.dirname(config.file);
             console.log(`Run ${configCommand}`);
-            let proc = child_process.spawn(command, args, { cwd: cwd, shell: process.platform === 'win32' });
+            const proc = child_process.spawn(command, args, { cwd: cwd, shell: process.platform === 'win32' });
             proc.on('error', (error) => {
                 reject(error);
             });

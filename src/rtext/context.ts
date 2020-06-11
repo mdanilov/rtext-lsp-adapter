@@ -7,7 +7,7 @@ export namespace Context {
 
     export function extract(lines: string[], pos: number): Context {
         lines = filter_lines(lines);
-        let joined_lines = join_lines(lines, pos);
+        const joined_lines = join_lines(lines, pos);
         lines = joined_lines.lines;
         pos = joined_lines.pos;
 
@@ -15,7 +15,7 @@ export namespace Context {
         let array_nesting = 0;
         let block_nesting = 0;
         let last_element_line = 0;
-        let result: string[] = [];
+        const result: string[] = [];
         lines.reverse().forEach((l, i) => {
             if (i === 0)
                 result.unshift(l);
@@ -57,13 +57,13 @@ export namespace Context {
 
     function filter_lines(lines: string[]): string[] {
         return lines.filter((l) => {
-            let ls = l.trim();
+            const ls = l.trim();
             return ls[0] != "@" && ls[0] != "#"
         });
     }
 
     function join_lines(lines: string[], pos: number) {
-        let outlines: string[] = [];
+        const outlines: string[] = [];
         while (lines.length > 0) {
             outlines.push(lines.shift()!);
             while (lines.length > 0 &&
@@ -72,7 +72,7 @@ export namespace Context {
                     (!outlines[outlines.length - 1].match(/^\s*\w+:/) &&
                         (outlines[outlines.length - 1].match(/\[\s*$/) ||
                             (lines[0].match(/^\s*\]/) && outlines[outlines.length - 1].match(/\[/)))))) {
-                let l = lines.shift()!;
+                const l = lines.shift()!;
                 outlines[outlines.length - 1] = outlines[outlines.length - 1].replace("\\", "");
                 if (lines.length == 0) {
                     // the prefix might have whitespace on the

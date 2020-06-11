@@ -9,7 +9,6 @@ import {
     SymbolInformation,
     TextDocuments,
     TextDocumentSyncKind,
-    Hover,
     TextDocumentPositionParams,
     InsertTextFormat,
     CompletionParams,
@@ -90,10 +89,10 @@ function provideDiagnostics() {
 }
 
 function extractContext(document: TextDocument, position: any): Context {
-    let text = document.getText(Range.create(0, 0, position.line, Number.MAX_SAFE_INTEGER));
-    let lines = text.split('\n');
+    const text = document.getText(Range.create(0, 0, position.line, Number.MAX_SAFE_INTEGER));
+    const lines = text.split('\n');
     lines.pop(); // remove last `\n` added by getText
-    let pos = position.character + 1; // column number start at 1 in RText protocol
+    const pos = position.character + 1; // column number start at 1 in RText protocol
     return Context.extract(lines, pos);
 }
 
@@ -109,7 +108,7 @@ connection.onHover((params: TextDocumentPositionParams) => {
 
 connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): Promise<SymbolInformation[]> | undefined => {
     return rtextClient.findElements(params.query).then((response: rtext.FindElementsResponse) => {
-        let info: SymbolInformation[] = [];
+        const info: SymbolInformation[] = [];
         response.elements.forEach((e) => {
             info.push({
                 name: e.display,
@@ -129,7 +128,7 @@ connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): Promise<SymbolInfo
 
 connection.onDocumentLinks((params: DocumentLinkParams): DocumentLink[] => {
     const document = documents.get(params.textDocument.uri);
-    let links: DocumentLink[] = [];
+    const links: DocumentLink[] = [];
     if (document) {
         const lines: string[] = document.getText().split('\n');
         const re = /\/+[\/\w]+/g;
@@ -138,11 +137,11 @@ connection.onDocumentLinks((params: DocumentLinkParams): DocumentLink[] => {
             do {
                 m = re.exec(line);
                 if (m) {
-                    let range = Range.create(
+                    const range = Range.create(
                         { line: index, character: m.index },
                         { line: index, character: m.index + m[0].length }
                     );
-                    let data = { textDocument: params.textDocument };
+                    const data = { textDocument: params.textDocument };
                     links.push({ range, data });
                 }
             } while (m)
@@ -167,9 +166,9 @@ connection.onDocumentLinkResolve((link: DocumentLink): Promise<DocumentLink> | u
 connection.onCompletion((params: CompletionParams): Promise<CompletionItem[]> | undefined => {
     function createSnippetString(insert: string): string {
         let begin = 0;
-        let snippet: string = "";
+        let snippet = "";
         while (begin != -1) {
-            let pos = begin;
+            const pos = begin;
             begin = insert.indexOf('|', begin);
             if (pos != begin) {
                 const text = insert.substring(pos, begin === -1 ? insert.length : begin);
@@ -177,15 +176,16 @@ connection.onCompletion((params: CompletionParams): Promise<CompletionItem[]> | 
             }
             if (begin != -1) {
                 let end = insert.indexOf('|', begin);
-                let number = parseInt(insert.substring(begin, end));
+                const number = parseInt(insert.substring(begin, end));
 
                 begin = end;
                 end = insert.indexOf('|', begin);
-                let name = insert.substring(begin, end);
+                const name = insert.substring(begin, end);
 
                 begin = end;
                 end = insert.indexOf('|', begin);
-                let description = insert.substring(begin, end);
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const description = insert.substring(begin, end);
 
                 begin = end;
                 snippet = snippet.concat(`\$\{${number}:${name}\}`);
@@ -246,7 +246,7 @@ connection.onInitialized(async () => {
     }
 });
 
-connection.onDidChangeWatchedFiles((params) => {
+connection.onDidChangeWatchedFiles(() => {
     provideDiagnostics();
 });
 
