@@ -1,0 +1,23 @@
+{
+    "name": "rtext-lsp-adapter",
+    "description": "A proxy which adapts VSCode LSP requests to RText Service protocol commands.",
+    "version": "1.0.0",
+    "license": "MIT",
+    "engines": {
+        "node": "*"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/mdanilov/rtext-lsp-adapter"
+    },
+    "dependencies": {
+        "vscode-languageserver": "^6.1.1",
+        "vscode-languageserver-textdocument": "^1.0.0"
+    },
+    "scripts": {
+        "compile": "tsc -p ./"
+    },
+    "devDependencies": {
+        "@types/node": "^14.0.13"
+    }
+}
