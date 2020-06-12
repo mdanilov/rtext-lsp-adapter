@@ -17,7 +17,7 @@ import {
     CompletionItemKind,
     WorkspaceSymbolParams,
     SymbolKind,
-    DeclarationParams
+    ReferenceParams
 } from "vscode-languageserver";
 
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -110,19 +110,21 @@ connection.onHover((params: TextDocumentPositionParams) => {
     }
 });
 
-connection.onDeclaration((params: DeclarationParams): Promise<Location | undefined> | undefined => {
+connection.onReferences((params: ReferenceParams): Promise<Location[] | undefined> | undefined => {
     const document = documents.get(params.textDocument.uri);
     if (document) {
         const ctx = extractContext(document, params.position);
         return rtextClient.getLinkTargets(ctx).then((response: rtext.LinkTargetsResponse) => {
-            if (response.targets.length > 0) {
-                const target = response.targets[0];
+            let locations: Location[] = [];
+            response.targets.forEach( target => {
                 const range = Range.create(
-                    { line: target.line, character: 0 },
-                    { line: target.line, character: Number.MAX_SAFE_INTEGER }
+                    { line: target.line - 1, character: 0 },
+                    { line: target.line - 1, character: Number.MAX_SAFE_INTEGER }
                 );
-                return Location.create(pathToFileURL(target.file).toString(), range);
-            }
+                const uri = pathToFileURL(target.file).toString();
+                locations.push({ uri, range });
+            });
+            return locations;
         });
     }
 });
@@ -249,7 +251,7 @@ connection.onInitialize((params) => {
                 change: TextDocumentSyncKind.Full,
                 openClose: true,
             },
-            declarationProvider: true,
+            referencesProvider: true,
             completionProvider: {
                 resolveProvider: false
             },
