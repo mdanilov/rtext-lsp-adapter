@@ -10,10 +10,12 @@ import { Message } from "./message";
 import { ServiceConfig } from "./config";
 import { ConnectorInterface } from "./connectorManager";
 
+export type ProgressCallback = (progress: rtextProtocol.ProgressInformation) => void;
+
 class PendingRequest {
     public invocationId = 0;
     public command = "";
-    public progressCallback?: Function;
+    public progressCallback?: ProgressCallback;
     public resolveFunc: Function = () => { };
 }
 
@@ -93,7 +95,7 @@ export class Client implements ConnectorInterface {
         }
     }
 
-    public loadModel(progressCallback?: Function): Promise<rtextProtocol.LoadModelResponse> {
+    public loadModel(progressCallback?: ProgressCallback): Promise<rtextProtocol.LoadModelResponse> {
         return this.send({ command: "load_model" }, progressCallback);
     }
 
@@ -105,7 +107,7 @@ export class Client implements ConnectorInterface {
         return this.send({ command: "version" });
     }
 
-    public send(data: any, progressCallback?: Function | undefined): Promise<any> {
+    public send(data: any, progressCallback?: ProgressCallback): Promise<any> {
         if (!this._connected) {
             return Promise.reject(new Error("rtext-service is not connected"));
         }
@@ -137,7 +139,6 @@ export class Client implements ConnectorInterface {
     private onConnect(port: number, host: string) {
         this._connected = true;
         console.log("Connected to " + host + ":" + port);
-        this.loadModel();
     }
 
     private onClose() {
@@ -172,7 +173,7 @@ export class Client implements ConnectorInterface {
                     this._pendingRequests.splice(found, 1);
                 } else if (obj.type === "progress" &&
                     pending.progressCallback) {
-                    pending.progressCallback!(obj);
+                    pending.progressCallback(obj);
                 } else if (obj.type === "unknown_command_error") {
                     console.log("Error: unknown command - " + obj.command);
                     this._pendingRequests.splice(found, 1);

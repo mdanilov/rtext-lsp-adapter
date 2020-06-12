@@ -182,3 +182,22 @@ export interface FindElementsResponse {
      */
     elements: FindElement[];
 }
+
+/**
+ * Before the actual response is sent, the backend may send progress information.
+ * This is useful whenever a command takes a longer time to complete.
+ * Frontends should be prepared to receive progress information messages for any command.
+ * They may however choose to ignore this information, i.e. not display any progress to the user.
+ */
+export interface ProgressInformation {
+    /**
+     * If percentage is present, the frontend should display a progress bar, otherwise it should just
+     * indicate to the user that a job is ongoing. Values in range [0..100].
+     */
+    percentage?: number;
+
+    /**
+     * The message field may carry information about the currently ongoing subtask.
+     */
+    message?: string;
+}

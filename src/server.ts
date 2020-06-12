@@ -44,8 +44,20 @@ let settings: ServerInitializationOptions;
 let rtextClient: RTextClient;
 
 let previousProblemFiles: string[] = [];
-function provideDiagnostics() {
-    rtextClient.loadModel().then((data) => {
+async function provideDiagnostics() {
+    const progressReporter = await connection.window.createWorkDoneProgress();
+    progressReporter.begin("ESR Automate: Loading model", 0);
+    rtextClient.loadModel((progress: rtext.ProgressInformation) => {
+        if ((progress.percentage != undefined) && (progress.message != undefined)) {
+            progressReporter.report(progress.percentage, progress.message);
+        }
+        else if (progress.percentage != undefined) {
+            progressReporter.report(progress.percentage);
+        }
+        else if (progress.message != undefined) {
+            progressReporter.report(progress.message);
+        }
+    }).then((data) => {
         const problemFiles: string[] = [];
         data.problems.forEach((problem) => {
             const diagnostics: Diagnostic[] = [];
@@ -85,11 +97,10 @@ function provideDiagnostics() {
                 connection.sendDiagnostics({ uri: pathToFileURL(file).toString(), diagnostics: [] });
             }
         });
-
         previousProblemFiles = problemFiles;
     }).catch(error => {
         console.log(`Failed to load model: ${error.message}`);
-    });
+    }).finally(() => { progressReporter.done(); });
 }
 
 function extractContext(document: TextDocument, position: any): Context {
@@ -116,7 +127,7 @@ connection.onReferences((params: ReferenceParams): Promise<Location[] | undefine
         const ctx = extractContext(document, params.position);
         return rtextClient.getLinkTargets(ctx).then((response: rtext.LinkTargetsResponse) => {
             let locations: Location[] = [];
-            response.targets.forEach( target => {
+            response.targets.forEach(target => {
                 const range = Range.create(
                     { line: target.line - 1, character: 0 },
                     { line: target.line - 1, character: Number.MAX_SAFE_INTEGER }
