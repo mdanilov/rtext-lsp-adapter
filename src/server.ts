@@ -11,11 +11,13 @@ import {
     TextDocumentSyncKind,
     TextDocumentPositionParams,
     InsertTextFormat,
+    Location,
     CompletionParams,
     CompletionItem,
     CompletionItemKind,
     WorkspaceSymbolParams,
-    SymbolKind
+    SymbolKind,
+    DeclarationParams
 } from "vscode-languageserver";
 
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -102,6 +104,23 @@ connection.onHover((params: TextDocumentPositionParams) => {
         const ctx = extractContext(document, params.position);
         return rtextClient.getContextInformation(ctx).then((response: rtext.ContextInformationResponse) => {
             return { contents: response.desc };
+        });
+    }
+});
+
+connection.onDeclaration((params: DeclarationParams): Promise<Location | undefined> | undefined => {
+    const document = documents.get(params.textDocument.uri);
+    if (document) {
+        const ctx = extractContext(document, params.position);
+        return rtextClient.getLinkTargets(ctx).then((response: rtext.LinkTargetsResponse) => {
+            if (response.targets.length > 0) {
+                const target = response.targets[0];
+                const range = Range.create(
+                    { line: target.line, character: 0 },
+                    { line: target.line, character: Number.MAX_SAFE_INTEGER }
+                );
+                return Location.create(target.file, range);
+            }
         });
     }
 });
@@ -225,6 +244,7 @@ connection.onInitialize((params) => {
                 change: TextDocumentSyncKind.Full,
                 openClose: true,
             },
+            declarationProvider: true,
             completionProvider: {
                 resolveProvider: false
             },

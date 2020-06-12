@@ -205,7 +205,7 @@ export class Client implements ConnectorInterface {
             const args = configCommand.split(' ').slice(1);
             const cwd = path.dirname(config.file);
             console.log(`Run ${configCommand}`);
-            const proc = child_process.spawn(command, args, { cwd: cwd, shell: process.platform === 'win32' });
+            const proc = child_process.spawn(command, args, { cwd: cwd, shell: true });
             proc.on('error', (error) => {
                 reject(error);
             });
