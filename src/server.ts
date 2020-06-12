@@ -27,6 +27,8 @@ import * as rtext from "./rtext/protocol";
 import { Context } from "./rtext/context";
 import { ServerInitializationOptions } from "./options";
 
+import { pathToFileURL } from 'url'
+
 // Creates the LSP connection
 const connection = createConnection(ProposedFeatures.all);
 
@@ -74,13 +76,13 @@ function provideDiagnostics() {
 
                 diagnostics.push(diagnostic);
             });
-            connection.sendDiagnostics({ uri: problem.file, diagnostics });
+            connection.sendDiagnostics({ uri: pathToFileURL(problem.file).toString(), diagnostics });
             problemFiles.push(problem.file);
         });
 
         previousProblemFiles.forEach((file) => {
             if (!problemFiles.includes(file)) {
-                connection.sendDiagnostics({ uri: file, diagnostics: [] });
+                connection.sendDiagnostics({ uri: pathToFileURL(file).toString(), diagnostics: [] });
             }
         });
 
@@ -119,7 +121,7 @@ connection.onDeclaration((params: DeclarationParams): Promise<Location | undefin
                     { line: target.line, character: 0 },
                     { line: target.line, character: Number.MAX_SAFE_INTEGER }
                 );
-                return Location.create(target.file, range);
+                return Location.create(pathToFileURL(target.file).toString(), range);
             }
         });
     }
@@ -132,7 +134,7 @@ connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): Promise<SymbolInfo
             info.push({
                 name: e.display,
                 location: {
-                    uri: e.file,
+                    uri: pathToFileURL(e.file).toString(),
                     range: {
                         start: { line: e.line, character: 0 },
                         end: { line: e.line, character: Number.MAX_SAFE_INTEGER }
@@ -175,7 +177,10 @@ connection.onDocumentLinkResolve((link: DocumentLink): Promise<DocumentLink> | u
         const ctx = extractContext(document, link.range.start);
         return rtextClient.getLinkTargets(ctx).then((response: rtext.LinkTargetsResponse) => {
             if (response.targets.length > 0) {
-                link.target = `${response.targets[0].file}#${response.targets[0].line}`;
+                const target = response.targets[0];
+                let url = pathToFileURL(target.file);
+                url.hash = target.line.toString();
+                link.target = url.toString();
             }
             return link;
         });
