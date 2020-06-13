@@ -280,6 +280,8 @@ connection.onInitialized(async () => {
     if (workspaceFolder) {
         rtextClient.start().then(() => {
             provideDiagnostics();
+        }).catch((error: Error) => {
+            connection.window.showErrorMessage(error.message);
         });
     }
 });

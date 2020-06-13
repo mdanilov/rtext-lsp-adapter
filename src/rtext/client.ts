@@ -62,9 +62,7 @@ export class Client implements ConnectorInterface {
                 const port: number = service.port!;
                 this._client.connect(port, Client.LOCALHOST, () => { this.onConnect(port, Client.LOCALHOST); resolve() });
             });
-        }).catch(error => {
-            console.log(`Failed to run service ${this.config.command}, reason: ${error.message}`);
-        });
+        })
     }
 
     public getContextInformation(context: Context): Promise<rtextProtocol.ContextInformationResponse> {
@@ -208,7 +206,14 @@ export class Client implements ConnectorInterface {
             console.log(`Run ${configCommand}`);
             const proc = child_process.spawn(command, args, { cwd: cwd, shell: true });
             proc.on('error', (error) => {
-                reject(error);
+                reject(new Error(`Failed to run service ${this.config.command}, reason: ${error.message}`));
+            });
+            proc.stderr.on('data', (data: any) => {
+                const stderr = data.toString();
+                console.log(stderr);
+                if (stderr.match(/License checkout failed/)) {
+                    reject(new Error(stderr));
+                }
             });
             proc.stdout.on('data', (data: any) => {
                 const stdout: string = data.toString();
