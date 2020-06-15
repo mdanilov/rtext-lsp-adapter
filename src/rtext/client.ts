@@ -114,6 +114,8 @@ export class Client implements ConnectorInterface {
         data.version = 1;
         data.invocation_id = this._invocationCounter;
 
+        console.debug("Tx: " + JSON.stringify(data));
+
         const request = new PendingRequest();
         request.invocationId = this._invocationCounter;
         request.progressCallback = progressCallback;
@@ -156,7 +158,7 @@ export class Client implements ConnectorInterface {
         let obj: any;
         while (obj = Message.extract(this._responseData)) {
             this._responseData = this._responseData.slice(obj._dataLength);
-            console.log("Received: " + JSON.stringify(obj));
+            console.debug("Rx: " + JSON.stringify(obj));
 
             const found = this._pendingRequests.findIndex((request) => {
                 return request.invocationId === obj.invocation_id;
@@ -210,7 +212,7 @@ export class Client implements ConnectorInterface {
             });
             proc.stderr.on('data', (data: any) => {
                 const stderr = data.toString();
-                console.log(stderr);
+                console.error(stderr);
                 if (stderr.match(/License checkout failed/)) {
                     reject(new Error(stderr));
                 }
