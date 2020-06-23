@@ -1,7 +1,7 @@
 {
     "name": "rtext-lsp-adapter",
     "description": "A proxy which adapts VSCode LSP requests to RText Service protocol commands.",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "author": "Maksim Danilov",
     "license": "MIT",
     "engines": {

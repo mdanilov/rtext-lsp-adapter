@@ -56,7 +56,7 @@ export class Client implements ConnectorInterface {
 
             this._keepAliveTask = setInterval(() => {
                 this.getVersion().then((response) => { console.log("Keep alive, got version " + response.version); });
-            }, 60 * 1000);
+            }, 30 * 1000);
 
             return new Promise<void>(resolve => {
                 const port: number = service.port!;

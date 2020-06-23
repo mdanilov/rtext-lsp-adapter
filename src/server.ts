@@ -165,7 +165,7 @@ connection.onDocumentLinks((params: DocumentLinkParams): DocumentLink[] => {
     const links: DocumentLink[] = [];
     if (document) {
         const lines: string[] = document.getText().split('\n');
-        const re = /\/+[\/\w]+/g;
+        const re = /\/?\w+\/[\/\w]+\b/g;
         lines.forEach((line: string, index: number) => {
             let m;
             do {
