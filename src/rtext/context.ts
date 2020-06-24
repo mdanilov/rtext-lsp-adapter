@@ -79,7 +79,7 @@ export namespace Context {
                     // right hand side which is relevant for the position
                     pos = outlines[outlines.length - 1].length + pos
                 }
-                outlines[outlines.length - 1].concat(l);
+                outlines[outlines.length - 1] = outlines[outlines.length - 1].concat(l);
             }
         }
         return { lines: outlines, pos };
