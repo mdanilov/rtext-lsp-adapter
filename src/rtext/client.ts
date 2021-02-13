@@ -11,12 +11,14 @@ import { ServiceConfig } from "./config";
 import { ConnectorInterface } from "./connectorManager";
 
 export type ProgressCallback = (progress: rtextProtocol.ProgressInformation) => void;
+export type ModelLoaderDelegate = () => void;
 
 class PendingRequest {
     public invocationId = 0;
     public command = "";
     public progressCallback?: ProgressCallback;
     public resolveFunc: Function = () => { };
+    public rejectFunc: Function = () => { };
 }
 
 interface RTextService {
@@ -32,35 +34,53 @@ export class Client implements ConnectorInterface {
     private _client = new net.Socket();
     private _invocationCounter = 0;
     private _connected = false;
+    private _started = false;
     private _pendingRequests: PendingRequest[] = [];
     private _reconnectTimeout?: NodeJS.Timeout;
     private _keepAliveTask?: NodeJS.Timeout;
     private _rtextService?: RTextService;
     private _responseData: Buffer = Buffer.alloc(0);
     private static LOCALHOST = "127.0.0.1";
+    private _modelLoaderDelegate: ModelLoaderDelegate;
 
-    constructor(config: ServiceConfig) {
+    constructor(config: ServiceConfig, modelLoaderDelegate: ModelLoaderDelegate) {
         this.config = config;
+        this._modelLoaderDelegate = modelLoaderDelegate;
     }
 
     public async start(): Promise<void> {
+        if (this._started) {
+            this.stop();
+        }
+        this._started = true;
         return this.runRTextService(this.config).then(service => {
             this._rtextService = service;
             service.process!.on('close', () => {
                 this._rtextService = undefined;
             });
 
+            this._client = new net.Socket();
             this._client.on("data", (data) => this.onData(data));
             this._client.on("close", () => this.onClose());
             this._client.on("error", (error) => this.onError(error));
 
             this._keepAliveTask = setInterval(() => {
-                this.getVersion().then((response) => { console.log("Keep alive, got version " + response.version); });
+                console.log("Sending keep alive `version` request");
+                this.getVersion()
+                    .then((response) => {
+                        console.log("Keep alive, got version " + response.version);
+                    }).catch(error => {
+                        console.error(error.message);
+                    });
             }, 30 * 1000);
 
             return new Promise<void>(resolve => {
                 const port: number = service.port!;
-                this._client.connect(port, Client.LOCALHOST, () => { this.onConnect(port, Client.LOCALHOST); resolve() });
+                this._client.connect(port, Client.LOCALHOST, () => {
+                    this.onConnect(port, Client.LOCALHOST);
+                    this._modelLoaderDelegate();
+                    resolve();
+                });
             });
         })
     }
@@ -82,15 +102,20 @@ export class Client implements ConnectorInterface {
     }
 
     public stop(): void {
-        if (this._reconnectTimeout)
+        if (this._reconnectTimeout) {
             clearTimeout(this._reconnectTimeout);
-        this.stopService();
-        if (this._rtextService) {
-            this._rtextService.process!.kill();
         }
         if (this._keepAliveTask) {
             clearInterval(this._keepAliveTask);
+            this._keepAliveTask = undefined;
         }
+        if (this._connected) {
+            this.stopService();
+        }
+        if (this._rtextService) {
+            this._rtextService.process!.kill();
+        }
+        this._started = false;
     }
 
     public loadModel(progressCallback?: ProgressCallback): Promise<rtextProtocol.LoadModelResponse> {
@@ -107,7 +132,7 @@ export class Client implements ConnectorInterface {
 
     public send(data: any, progressCallback?: ProgressCallback): Promise<any> {
         if (!this._connected) {
-            return Promise.reject(new Error("rtext-service is not connected"));
+            return Promise.reject(new Error("RText service is not connected"));
         }
 
         data.type = "request";
@@ -129,6 +154,7 @@ export class Client implements ConnectorInterface {
 
         return new Promise<any>((resolve, reject) => {
             request.resolveFunc = resolve;
+            request.rejectFunc = reject;
         });
     }
 
@@ -145,12 +171,20 @@ export class Client implements ConnectorInterface {
         this._connected = false;
         console.log("Connection closed");
 
-        this._reconnectTimeout = setTimeout(() => {
-            if (this._rtextService) {
-                const port: number = this._rtextService.port!;
-                this._client.connect(port, Client.LOCALHOST, () => this.onConnect(port, Client.LOCALHOST));
+        for (let request of this._pendingRequests) {
+            if (request.rejectFunc) {
+                request.rejectFunc(new Error('RText service connection closed'));
             }
-        }, 1000);
+        }
+
+        if (this._keepAliveTask) {
+            clearInterval(this._keepAliveTask);
+            this._keepAliveTask = undefined;
+        }
+
+        if (this._started) {
+            this._reconnectTimeout = setTimeout(() => { this.start(); }, 3000);
+        }
     }
 
     private onData(data: any) {

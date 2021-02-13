@@ -12,6 +12,7 @@ import {
     TextDocumentPositionParams,
     InsertTextFormat,
     Location,
+    Hover,
     CompletionParams,
     CompletionItem,
     CompletionItemKind,
@@ -111,17 +112,20 @@ function extractContext(document: TextDocument, position: any): Context {
     return Context.extract(lines, pos);
 }
 
-connection.onHover((params: TextDocumentPositionParams) => {
+connection.onHover((params: TextDocumentPositionParams): Promise<Hover | null> | undefined => {
     const document = documents.get(params.textDocument.uri);
     if (document) {
         const ctx = extractContext(document, params.position);
         return rtextClient.getContextInformation(ctx).then((response: rtext.ContextInformationResponse) => {
             return { contents: response.desc };
+        }).catch(error => {
+            connection.console.error(error.message);
+            return null;
         });
     }
 });
 
-connection.onReferences((params: ReferenceParams): Promise<Location[] | undefined> | undefined => {
+connection.onReferences((params: ReferenceParams): Promise<Location[] | null> | undefined => {
     const document = documents.get(params.textDocument.uri);
     if (document) {
         const ctx = extractContext(document, params.position);
@@ -136,11 +140,14 @@ connection.onReferences((params: ReferenceParams): Promise<Location[] | undefine
                 locations.push({ uri, range });
             });
             return locations;
+        }).catch(error => {
+            connection.console.error(error.message);
+            return null;
         });
     }
 });
 
-connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): Promise<SymbolInformation[]> | undefined => {
+connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): Promise<SymbolInformation[] | null> | undefined => {
     return rtextClient.findElements(params.query).then((response: rtext.FindElementsResponse) => {
         const info: SymbolInformation[] = [];
         response.elements.forEach((e) => {
@@ -157,6 +164,9 @@ connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): Promise<SymbolInfo
             });
         });
         return info;
+    }).catch(error => {
+        connection.console.error(error.message);
+        return null;
     });
 });
 
@@ -184,7 +194,7 @@ connection.onDocumentLinks((params: DocumentLinkParams): DocumentLink[] => {
     return links;
 });
 
-connection.onDocumentLinkResolve((link: DocumentLink): Promise<DocumentLink> | undefined => {
+connection.onDocumentLinkResolve((link: DocumentLink): Promise<DocumentLink | null> | undefined => {
     const document = documents.get(link.data.textDocument.uri);
     if (document) {
         const ctx = extractContext(document, link.range.start);
@@ -196,11 +206,14 @@ connection.onDocumentLinkResolve((link: DocumentLink): Promise<DocumentLink> | u
                 link.target = url.toString();
             }
             return link;
+        }).catch(error => {
+            connection.console.error(error.message);
+            return null;
         });
     }
 });
 
-connection.onCompletion((params: CompletionParams): Promise<CompletionItem[]> | undefined => {
+connection.onCompletion((params: CompletionParams): Promise<CompletionItem[] | null> | undefined => {
     function createSnippetString(insert: string): string {
         let begin = 0;
         let snippet = "";
@@ -245,6 +258,9 @@ connection.onCompletion((params: CompletionParams): Promise<CompletionItem[]> | 
                 });
             });
             return items;
+        }).catch(error => {
+            connection.console.error(error.message);
+            return null;
         });
     }
 });
@@ -254,7 +270,7 @@ connection.onInitialize((params) => {
     connection.console.log(`[Server(${process.pid}) ${workspaceFolder}] Started and initialize received`);
 
     settings = params.initializationOptions;
-    rtextClient = new RTextClient(settings.rtextConfig);
+    rtextClient = new RTextClient(settings.rtextConfig, () => { provideDiagnostics(); });
 
     return {
         capabilities: {
