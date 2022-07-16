@@ -1,14 +1,12 @@
 {
     "compilerOptions": {
-        "baseUrl": ".",
         "module": "commonjs",
         "moduleResolution": "node",
         "outDir": "out",
         "target": "es6",
         "strict": true,
-        "sourceMap": true,
-        "composite": true,
-        "declaration": true
+        "sourceMap": true
     },
-    "include": ["src/**/*"]
+    "include": ["src/**/*"],
+    "exclude": ["node_modules", ".vscode-test"]
 }
