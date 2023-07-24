@@ -4,6 +4,7 @@ import {
     DiagnosticSeverity,
     DocumentLink,
     DocumentLinkParams,
+    Position,
     ProposedFeatures,
     Range,
     SymbolInformation,
@@ -83,7 +84,7 @@ async function provideDiagnostics() {
             problem.problems.forEach((fileProblem) => {
                 const diagnostic: Diagnostic = {
                     message: fileProblem.message,
-                    range: Range.create(fileProblem.line - 1, 0, fileProblem.line - 1, Number.MAX_SAFE_INTEGER),
+                    range: Range.create(Position.create(fileProblem.line - 1, 0), Position.create(fileProblem.line - 1, Number.MAX_VALUE)),
                     severity: convertSeverity(fileProblem.severity),
                 };
 
@@ -105,7 +106,7 @@ async function provideDiagnostics() {
 }
 
 function extractContext(document: TextDocument, position: any): Context {
-    const text = document.getText(Range.create(0, 0, position.line, Number.MAX_SAFE_INTEGER));
+    const text = document.getText(Range.create(Position.create(0, 0), Position.create(position.line, Number.MAX_VALUE)));
     const lines = text.split('\n');
     lines.pop(); // remove last `\n` added by getText
     const pos = position.character + 1; // column number start at 1 in RText protocol
@@ -133,8 +134,8 @@ connection.onReferences((params: ReferenceParams): Promise<Location[] | null> | 
             let locations: Location[] = [];
             response.targets.forEach(target => {
                 const range = Range.create(
-                    { line: target.line - 1, character: 0 },
-                    { line: target.line - 1, character: Number.MAX_SAFE_INTEGER }
+                    Position.create(target.line - 1, 0),
+                    Position.create(target.line - 1, Number.MAX_VALUE)
                 );
                 const uri = pathToFileURL(target.file).toString();
                 locations.push({ uri, range });
@@ -156,8 +157,8 @@ connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): Promise<SymbolInfo
                 location: {
                     uri: pathToFileURL(e.file).toString(),
                     range: {
-                        start: { line: e.line, character: 0 },
-                        end: { line: e.line, character: Number.MAX_SAFE_INTEGER }
+                        start: { line: e.line - 1, character: 0 },
+                        end: { line: e.line - 1, character: Number.MAX_VALUE }
                     }
                 },
                 kind: SymbolKind.Null
@@ -182,8 +183,8 @@ connection.onDocumentLinks((params: DocumentLinkParams): DocumentLink[] => {
                 m = re.exec(line);
                 if (m) {
                     const range = Range.create(
-                        { line: index, character: m.index },
-                        { line: index, character: m.index + m[0].length }
+                        index, m.index,
+                        index, m.index + m[0].length
                     );
                     const data = { textDocument: params.textDocument };
                     links.push({ range, data });

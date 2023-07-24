@@ -98,7 +98,7 @@ export class Client implements ConnectorInterface {
     }
 
     public findElements(pattern: string): Promise<rtextProtocol.FindElementsResponse> {
-        return this.send({ command: "find_elements", pattern: pattern });
+        return this.send({ command: "find_elements", search_pattern: pattern });
     }
 
     public stop(): void {
