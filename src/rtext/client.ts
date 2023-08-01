@@ -45,10 +45,12 @@ export class Client implements ConnectorInterface {
         this.config = config;
     }
 
+    public async restart(): Promise<void> {
+        await this.stop();
+        await this.start();
+    }
+
     public async start(): Promise<void> {
-        if (this._started) {
-            this.stop();
-        }
         this._started = true;
         return this.runRTextService(this.config).then(service => {
             this._rtextService = service;
@@ -97,29 +99,51 @@ export class Client implements ConnectorInterface {
         return this.send({ command: "find_elements", search_pattern: pattern });
     }
 
-    public stop(): void {
+    public async stop(): Promise<void> {
         if (this._reconnectTimeout) {
             clearTimeout(this._reconnectTimeout);
         }
+
         if (this._keepAliveTask) {
             clearInterval(this._keepAliveTask);
             this._keepAliveTask = undefined;
         }
-        if (this._connected) {
-            this.stopService();
+
+        if (!this._started) {
+            return;
         }
-        if (this._rtextService) {
-            this._rtextService.process!.kill();
+
+        return this.stopService().finally(() => {
+            if (this._rtextService) {
+                this.checkProcessDied(this._rtextService.process);
+            }
+            this._started = false;
+        });
+    }
+
+    private checkProcessDied(childProcess: child_process.ChildProcess | undefined): void {
+        if (!childProcess || childProcess.pid === undefined) {
+            return;
         }
-        this._started = false;
+        setTimeout(() => {
+            // Test if the process is still alive. Throws an exception if not
+            try {
+                if (childProcess.pid !== undefined) {
+                    process.kill(childProcess.pid, 0);
+                    childProcess.kill('SIGKILL');
+                }
+            } catch (error) {
+                // All is fine.
+            }
+        }, 2000);
     }
 
     public loadModel(progressCallback?: ProgressCallback): Promise<rtextProtocol.LoadModelResponse> {
         return this.send({ command: "load_model" }, progressCallback);
     }
 
-    public stopService(): void {
-        this.send({ command: "stop" });
+    public stopService(): Promise<void> {
+        return this.send({ command: "stop" });
     }
 
     public getVersion(): Promise<rtextProtocol.VersionResponse> {

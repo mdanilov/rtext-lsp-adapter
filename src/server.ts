@@ -251,7 +251,7 @@ connection.onInitialize(async (params: lsp.InitializeParams): Promise<lsp.Initia
     rtextClient = new RTextClient(settings.rtextConfig);
 
     return new Promise<lsp.InitializeResult>((resolve, reject) => {
-        rtextClient.start().then(() => {
+        rtextClient.restart().then(() => {
             const initializeResult: lsp.InitializeResult = {
                 capabilities: {
                     textDocumentSync: {
