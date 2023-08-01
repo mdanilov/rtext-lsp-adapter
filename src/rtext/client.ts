@@ -237,6 +237,9 @@ export class Client implements ConnectorInterface {
             const cwd = path.dirname(config.file);
             console.log(`Run ${configCommand}`);
             const proc = child_process.spawn(command, args, { cwd: cwd, shell: true });
+            proc.on('exit', (code, signal) => {
+                reject(new Error(`Failed to run service ${this.config.command}, code: ${code}, signal: ${signal}`));
+            });
             proc.on('error', (error) => {
                 reject(new Error(`Failed to run service ${this.config.command}, reason: ${error.message}`));
             });
