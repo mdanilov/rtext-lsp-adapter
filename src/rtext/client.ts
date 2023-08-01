@@ -11,7 +11,6 @@ import { ServiceConfig } from "./config";
 import { ConnectorInterface } from "./connectorManager";
 
 export type ProgressCallback = (progress: rtextProtocol.ProgressInformation) => void;
-export type ModelLoaderDelegate = () => void;
 
 class PendingRequest {
     public invocationId = 0;
@@ -41,11 +40,9 @@ export class Client implements ConnectorInterface {
     private _rtextService?: RTextService;
     private _responseData: Buffer = Buffer.alloc(0);
     private static LOCALHOST = "127.0.0.1";
-    private _modelLoaderDelegate: ModelLoaderDelegate;
 
-    constructor(config: ServiceConfig, modelLoaderDelegate: ModelLoaderDelegate) {
+    constructor(config: ServiceConfig) {
         this.config = config;
-        this._modelLoaderDelegate = modelLoaderDelegate;
     }
 
     public async start(): Promise<void> {
@@ -78,7 +75,6 @@ export class Client implements ConnectorInterface {
                 const port: number = service.port!;
                 this._client.connect(port, Client.LOCALHOST, () => {
                     this.onConnect(port, Client.LOCALHOST);
-                    this._modelLoaderDelegate();
                     resolve();
                 });
             });

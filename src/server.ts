@@ -1,41 +1,18 @@
-import {
-    createConnection,
-    Diagnostic,
-    DiagnosticSeverity,
-    DocumentLink,
-    DocumentLinkParams,
-    Position,
-    ProposedFeatures,
-    Range,
-    SymbolInformation,
-    TextDocuments,
-    TextDocumentSyncKind,
-    TextDocumentPositionParams,
-    InsertTextFormat,
-    Location,
-    Hover,
-    CompletionParams,
-    CompletionItem,
-    CompletionItemKind,
-    WorkspaceSymbolParams,
-    SymbolKind,
-    ReferenceParams
-} from "vscode-languageserver/node";
+import * as lsp from 'vscode-languageserver/node';
+import { TextDocument } from 'vscode-languageserver-textdocument';
 
-import { TextDocument } from "vscode-languageserver-textdocument";
-
-import { Client as RTextClient } from "./rtext/client";
-import * as rtext from "./rtext/protocol";
-import { Context } from "./rtext/context";
-import { ServerInitializationOptions } from "./options";
+import { Client as RTextClient } from './rtext/client';
+import * as rtext from './rtext/protocol';
+import { Context } from './rtext/context';
+import { ServerInitializationOptions } from './options';
 
 import { pathToFileURL } from 'url'
 
 // Creates the LSP connection
-const connection = createConnection(ProposedFeatures.all);
+const connection = lsp.createConnection(lsp.ProposedFeatures.all);
 
 // Create a manager for open text documents
-const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
+const documents: lsp.TextDocuments<TextDocument> = new lsp.TextDocuments(TextDocument);
 
 // The workspace folder this server is operating on
 let workspaceFolder: string | null | undefined;
@@ -47,7 +24,7 @@ let rtextClient: RTextClient;
 
 let previousProblemFiles: string[] = [];
 async function provideDiagnostics() {
-    const progressReporter = await connection.window.createWorkDoneProgress();
+    const progressReporter: lsp.WorkDoneProgressServerReporter = await connection.window.createWorkDoneProgress();
     progressReporter.begin("ESR Automate: Loading model", 0);
     rtextClient.loadModel((progress: rtext.ProgressInformation) => {
         if ((progress.percentage != undefined) && (progress.message != undefined)) {
@@ -62,29 +39,29 @@ async function provideDiagnostics() {
     }).then((data) => {
         const problemFiles: string[] = [];
         data.problems.forEach((problem) => {
-            const diagnostics: Diagnostic[] = [];
+            const diagnostics: lsp.Diagnostic[] = [];
 
-            function convertSeverity(severity: rtext.ProblemSeverity): DiagnosticSeverity {
+            function convertSeverity(severity: rtext.ProblemSeverity): lsp.DiagnosticSeverity {
                 switch (severity) {
                     case rtext.ProblemSeverity.debug:
-                        return DiagnosticSeverity.Hint;
+                        return lsp.DiagnosticSeverity.Hint;
                     case rtext.ProblemSeverity.error:
                     case rtext.ProblemSeverity.fatal:
-                        return DiagnosticSeverity.Error;
+                        return lsp.DiagnosticSeverity.Error;
                     case rtext.ProblemSeverity.warn:
-                        return DiagnosticSeverity.Warning;
+                        return lsp.DiagnosticSeverity.Warning;
                     case rtext.ProblemSeverity.info:
-                        return DiagnosticSeverity.Information;
+                        return lsp.DiagnosticSeverity.Information;
                     default:
                         //@todo assert
-                        return DiagnosticSeverity.Error;
+                        return lsp.DiagnosticSeverity.Error;
                 }
             }
 
             problem.problems.forEach((fileProblem) => {
-                const diagnostic: Diagnostic = {
+                const diagnostic: lsp.Diagnostic = {
                     message: fileProblem.message,
-                    range: Range.create(Position.create(fileProblem.line - 1, 0), Position.create(fileProblem.line - 1, Number.MAX_VALUE)),
+                    range: lsp.Range.create(lsp.Position.create(fileProblem.line - 1, 0), lsp.Position.create(fileProblem.line - 1, Number.MAX_VALUE)),
                     severity: convertSeverity(fileProblem.severity),
                 };
 
@@ -106,14 +83,14 @@ async function provideDiagnostics() {
 }
 
 function extractContext(document: TextDocument, position: any): Context {
-    const text = document.getText(Range.create(Position.create(0, 0), Position.create(position.line, Number.MAX_VALUE)));
+    const text = document.getText(lsp.Range.create(lsp.Position.create(0, 0), lsp.Position.create(position.line, Number.MAX_VALUE)));
     const lines = text.split('\n');
     lines.pop(); // remove last `\n` added by getText
     const pos = position.character + 1; // column number start at 1 in RText protocol
     return Context.extract(lines, pos);
 }
 
-connection.onHover((params: TextDocumentPositionParams): Promise<Hover | null> | undefined => {
+connection.onHover((params: lsp.TextDocumentPositionParams): Promise<lsp.Hover | null> | undefined => {
     const document = documents.get(params.textDocument.uri);
     if (document) {
         const ctx = extractContext(document, params.position);
@@ -126,16 +103,16 @@ connection.onHover((params: TextDocumentPositionParams): Promise<Hover | null> |
     }
 });
 
-connection.onReferences((params: ReferenceParams): Promise<Location[] | null> | undefined => {
+connection.onReferences((params: lsp.ReferenceParams): Promise<lsp.Location[] | null> | undefined => {
     const document = documents.get(params.textDocument.uri);
     if (document) {
         const ctx = extractContext(document, params.position);
         return rtextClient.getLinkTargets(ctx).then((response: rtext.LinkTargetsResponse) => {
-            let locations: Location[] = [];
+            let locations: lsp.Location[] = [];
             response.targets.forEach(target => {
-                const range = Range.create(
-                    Position.create(target.line - 1, 0),
-                    Position.create(target.line - 1, Number.MAX_VALUE)
+                const range = lsp.Range.create(
+                    lsp.Position.create(target.line - 1, 0),
+                    lsp.Position.create(target.line - 1, Number.MAX_VALUE)
                 );
                 const uri = pathToFileURL(target.file).toString();
                 locations.push({ uri, range });
@@ -148,9 +125,9 @@ connection.onReferences((params: ReferenceParams): Promise<Location[] | null> | 
     }
 });
 
-connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): Promise<SymbolInformation[] | null> | undefined => {
+connection.onWorkspaceSymbol((params: lsp.WorkspaceSymbolParams): Promise<lsp.SymbolInformation[] | null> | undefined => {
     return rtextClient.findElements(params.query).then((response: rtext.FindElementsResponse) => {
-        const info: SymbolInformation[] = [];
+        const info: lsp.SymbolInformation[] = [];
         response.elements.forEach((e) => {
             info.push({
                 name: e.display,
@@ -161,7 +138,7 @@ connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): Promise<SymbolInfo
                         end: { line: e.line - 1, character: Number.MAX_VALUE }
                     }
                 },
-                kind: SymbolKind.Null
+                kind: lsp.SymbolKind.Null
             });
         });
         return info;
@@ -171,9 +148,9 @@ connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): Promise<SymbolInfo
     });
 });
 
-connection.onDocumentLinks((params: DocumentLinkParams): DocumentLink[] => {
+connection.onDocumentLinks((params: lsp.DocumentLinkParams): lsp.DocumentLink[] => {
     const document = documents.get(params.textDocument.uri);
-    const links: DocumentLink[] = [];
+    const links: lsp.DocumentLink[] = [];
     if (document) {
         const lines: string[] = document.getText().split('\n');
         const re = /\/?\w+\/[\/\w]+\b/g;
@@ -182,7 +159,7 @@ connection.onDocumentLinks((params: DocumentLinkParams): DocumentLink[] => {
             do {
                 m = re.exec(line);
                 if (m) {
-                    const range = Range.create(
+                    const range = lsp.Range.create(
                         index, m.index,
                         index, m.index + m[0].length
                     );
@@ -195,7 +172,7 @@ connection.onDocumentLinks((params: DocumentLinkParams): DocumentLink[] => {
     return links;
 });
 
-connection.onDocumentLinkResolve((link: DocumentLink): Promise<DocumentLink | null> | undefined => {
+connection.onDocumentLinkResolve((link: lsp.DocumentLink): Promise<lsp.DocumentLink | null> | undefined => {
     const document = documents.get(link.data.textDocument.uri);
     if (document) {
         const ctx = extractContext(document, link.range.start);
@@ -214,7 +191,7 @@ connection.onDocumentLinkResolve((link: DocumentLink): Promise<DocumentLink | nu
     }
 });
 
-connection.onCompletion((params: CompletionParams): Promise<CompletionItem[] | null> | undefined => {
+connection.onCompletion((params: lsp.CompletionParams): Promise<lsp.CompletionItem[] | null> | undefined => {
     function createSnippetString(insert: string): string {
         let begin = 0;
         let snippet = "";
@@ -248,14 +225,14 @@ connection.onCompletion((params: CompletionParams): Promise<CompletionItem[] | n
     if (document) {
         const ctx = extractContext(document, params.position);
         return rtextClient.getContentCompletion(ctx).then((response: rtext.ContentCompleteResponse) => {
-            const items: CompletionItem[] = [];
+            const items: lsp.CompletionItem[] = [];
             response.options.forEach((option) => {
                 items.push({
                     insertText: createSnippetString(option.insert),
-                    insertTextFormat: InsertTextFormat.Snippet,
+                    insertTextFormat: lsp.InsertTextFormat.Snippet,
                     label: option.display,
                     detail: option.desc,
-                    kind: CompletionItemKind.Snippet
+                    kind: lsp.CompletionItemKind.Snippet
                 });
             });
             return items;
@@ -266,41 +243,43 @@ connection.onCompletion((params: CompletionParams): Promise<CompletionItem[] | n
     }
 });
 
-connection.onInitialize((params) => {
+connection.onInitialize(async (params: lsp.InitializeParams): Promise<lsp.InitializeResult | lsp.ResponseError<lsp.InitializeError>> => {
     workspaceFolder = params.rootPath;
     connection.console.log(`[Server(${process.pid}) ${workspaceFolder}] Started and initialize received`);
 
     settings = params.initializationOptions;
-    rtextClient = new RTextClient(settings.rtextConfig, () => { provideDiagnostics(); });
+    rtextClient = new RTextClient(settings.rtextConfig);
 
-    return {
-        capabilities: {
-            textDocumentSync: {
-                change: TextDocumentSyncKind.Full,
-                openClose: true,
-            },
-            referencesProvider: true,
-            completionProvider: {
-                resolveProvider: false
-            },
-            documentLinkProvider: {
-                resolveProvider: true
-            },
-            hoverProvider: settings.hoverProvider,
-            workspaceSymbolProvider: true
-        },
-    };
+    return new Promise<lsp.InitializeResult>((resolve, reject) => {
+        rtextClient.start().then(() => {
+            const initializeResult: lsp.InitializeResult = {
+                capabilities: {
+                    textDocumentSync: {
+                        change: lsp.TextDocumentSyncKind.Full,
+                        openClose: true,
+                    },
+                    referencesProvider: true,
+                    completionProvider: {
+                        resolveProvider: false
+                    },
+                    documentLinkProvider: {
+                        resolveProvider: true
+                    },
+                    hoverProvider: settings.hoverProvider,
+                    workspaceSymbolProvider: true
+                }
+            };
+            resolve(initializeResult);
+        }).catch((error: Error) => {
+            reject(new lsp.ResponseError<lsp.InitializeError>(
+                lsp.ErrorCodes.ServerNotInitialized, error.message, { retry: true }
+            ));
+        });
+    });
 });
 
-connection.onInitialized(async () => {
-    connection.console.log(`[Server(${process.pid}) ${workspaceFolder}] Initialized received`);
-    if (workspaceFolder) {
-        rtextClient.start().then(() => {
-            provideDiagnostics();
-        }).catch((error: Error) => {
-            connection.window.showErrorMessage(error.message);
-        });
-    }
+connection.onInitialized(() => {
+    provideDiagnostics();
 });
 
 connection.onDidChangeWatchedFiles(() => {
