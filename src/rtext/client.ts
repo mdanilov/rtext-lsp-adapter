@@ -1,5 +1,5 @@
 import * as net from "net";
-import * as child_process from "child_process";
+import * as cp from "child_process";
 import * as path from "path";
 import * as os from "os";
 import { clearInterval } from "timers";
@@ -20,10 +20,13 @@ class PendingRequest {
     public rejectFunc: Function = () => { };
 }
 
-interface RTextService {
-    config: ServiceConfig;
-    process?: child_process.ChildProcess;
-    port?: number;
+enum ClientState {
+    Initial,
+    Starting,
+    StartFailed,
+    Running,
+    Stopping,
+    Stopped
 }
 
 export class Client implements ConnectorInterface {
@@ -33,16 +36,19 @@ export class Client implements ConnectorInterface {
     private _client = new net.Socket();
     private _invocationCounter = 0;
     private _connected = false;
-    private _started = false;
+    private _state: ClientState;
+    private _onStart: Promise<void> | undefined;
+    private _onStop: Promise<void> | undefined;
+    private _serverProcess: cp.ChildProcess | undefined;
     private _pendingRequests: PendingRequest[] = [];
     private _reconnectTimeout?: NodeJS.Timeout;
     private _keepAliveTask?: NodeJS.Timeout;
-    private _rtextService?: RTextService;
     private _responseData: Buffer = Buffer.alloc(0);
     private static LOCALHOST = "127.0.0.1";
 
     constructor(config: ServiceConfig) {
         this.config = config;
+        this._state = ClientState.Initial;
     }
 
     public async restart(): Promise<void> {
@@ -51,13 +57,17 @@ export class Client implements ConnectorInterface {
     }
 
     public async start(): Promise<void> {
-        this._started = true;
-        return this.runRTextService(this.config).then(service => {
-            this._rtextService = service;
-            service.process!.on('close', () => {
-                this._rtextService = undefined;
-            });
+        if (this._state === ClientState.Stopping) {
+            throw new Error(`Client is currently stopping. Can only restart a full stopped client`);
+        }
 
+        if (this._onStart !== undefined) {
+            return this._onStart;
+        }
+
+        this._state = ClientState.Starting;
+
+        return this._onStart = this.runRTextService(this.config).then(port => {
             this._client = new net.Socket();
             this._client.on("data", (data) => this.onData(data));
             this._client.on("close", () => this.onClose());
@@ -73,14 +83,19 @@ export class Client implements ConnectorInterface {
                     });
             }, 30 * 1000);
 
+            this._state = ClientState.Running;
+
             return new Promise<void>(resolve => {
-                const port: number = service.port!;
                 this._client.connect(port, Client.LOCALHOST, () => {
                     this.onConnect(port, Client.LOCALHOST);
                     resolve();
                 });
             });
-        })
+        }).catch(error => {
+            this._state = ClientState.StartFailed;
+            this._onStart = undefined;
+            throw error;
+        });
     }
 
     public getContextInformation(context: Context): Promise<rtextProtocol.ContextInformationResponse> {
@@ -100,6 +115,18 @@ export class Client implements ConnectorInterface {
     }
 
     public async stop(): Promise<void> {
+        if (this._state === ClientState.Stopped || this._state === ClientState.Initial) {
+            return;
+        }
+
+        if (this._state === ClientState.Stopping) {
+            if (this._onStop !== undefined) {
+                return this._onStop;
+            } else {
+                throw new Error(`Client is stopping but no stop promise available.`);
+            }
+        }
+
         if (this._reconnectTimeout) {
             clearTimeout(this._reconnectTimeout);
         }
@@ -109,19 +136,18 @@ export class Client implements ConnectorInterface {
             this._keepAliveTask = undefined;
         }
 
-        if (!this._started) {
-            return;
-        }
+        this._state = ClientState.Stopping;
 
-        return this.stopService().finally(() => {
-            if (this._rtextService) {
-                this.checkProcessDied(this._rtextService.process);
-            }
-            this._started = false;
+        return this._onStop = this.stopService().finally(() => {
+            this.checkProcessDied(this._serverProcess);
+            this._serverProcess = undefined;
+            this._state = ClientState.Stopped;
+            this._onStart = undefined;
+            this._onStop = undefined;
         });
     }
 
-    private checkProcessDied(childProcess: child_process.ChildProcess | undefined): void {
+    private checkProcessDied(childProcess: cp.ChildProcess | undefined): void {
         if (!childProcess || childProcess.pid === undefined) {
             return;
         }
@@ -202,7 +228,7 @@ export class Client implements ConnectorInterface {
             this._keepAliveTask = undefined;
         }
 
-        if (this._started) {
+        if (this._state == ClientState.Running) {
             this._reconnectTimeout = setTimeout(() => { this.start(); }, 3000);
         }
     }
@@ -250,38 +276,41 @@ export class Client implements ConnectorInterface {
         return command;
     }
 
-    private async runRTextService(config: ServiceConfig): Promise<RTextService> {
-        const rtextService: RTextService = {
-            config: config
-        };
-        return new Promise<RTextService>((resolve, reject) => {
+    private async runRTextService(config: ServiceConfig): Promise<number> {
+        return new Promise<number>((resolve, reject) => {
             const configCommand = this.transformCommand(config.command.trim());
             const command = configCommand.split(' ')[0];
             const args = configCommand.split(' ').slice(1);
             const cwd = path.dirname(config.file);
+            console.log(`Working directory ${cwd}`);
             console.log(`Run ${configCommand}`);
-            const proc = child_process.spawn(command, args, { cwd: cwd, shell: true });
-            proc.on('exit', (code, signal) => {
-                reject(new Error(`Failed to run service ${this.config.command}, code: ${code}, signal: ${signal}`));
+            const serverProcess = cp.spawn(command, args, { cwd: cwd, shell: true });
+            if (!serverProcess || !serverProcess.pid) {
+                reject(new Error(`Launching server using command ${this.config.command} failed.`));
+            }
+            this._serverProcess = serverProcess;
+            serverProcess.on('exit', (code, signal) => {
+                if (this._state === ClientState.Starting) {
+                    reject(new Error(`Launching server using command ${this.config.command} failed.`));
+                }
             });
-            proc.on('error', (error) => {
+            serverProcess.on('error', (error) => {
                 reject(new Error(`Failed to run service ${this.config.command}, reason: ${error.message}`));
             });
-            proc.stderr.on('data', (data: any) => {
+            serverProcess.stderr.on('data', (data: any) => {
                 const stderr = data.toString();
                 console.error(stderr);
                 if (stderr.match(/License checkout failed/)) {
                     reject(new Error(stderr));
                 }
             });
-            proc.stdout.on('data', (data: any) => {
+            serverProcess.stdout.on('data', (data: any) => {
                 const stdout: string = data.toString();
                 console.log(stdout);
                 const foundPort = stdout.match(/.*listening on port (\d*)/);
                 if (foundPort) {
-                    rtextService.port = parseInt(foundPort[1]);
-                    rtextService.process = proc;
-                    resolve(rtextService);
+                    const port: number = parseInt(foundPort[1]);
+                    resolve(port);
                 }
             });
         });
