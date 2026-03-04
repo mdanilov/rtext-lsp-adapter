@@ -63,6 +63,7 @@ async function provideDiagnostics() {
                     message: fileProblem.message,
                     range: lsp.Range.create(lsp.Position.create(fileProblem.line - 1, 0), lsp.Position.create(fileProblem.line - 1, Number.MAX_VALUE)),
                     severity: convertSeverity(fileProblem.severity),
+                    source: `rtext${settings.id}`
                 };
 
                 diagnostics.push(diagnostic);
