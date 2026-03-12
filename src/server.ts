@@ -1,9 +1,9 @@
 import * as lsp from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 
-import { Client as RTextClient } from './rtext/client';
-import * as rtext from './rtext/protocol';
-import { Context } from './rtext/context';
+import * as client from './rtext/client'
+import * as protocol from './rtext/protocol';
+import * as context from './rtext/context';
 import { ServerInitializationOptions } from './options';
 
 import { pathToFileURL } from 'url'
@@ -20,13 +20,13 @@ let workspaceFolder: string | null | undefined;
 // Initialization options passed by the client
 let settings: ServerInitializationOptions;
 
-let rtextClient: RTextClient;
+let rtextClient: client.Client;
 
 let previousProblemFiles: string[] = [];
 async function provideDiagnostics() {
     const progressReporter: lsp.WorkDoneProgressServerReporter = await connection.window.createWorkDoneProgress();
     progressReporter.begin("ESR Automate: Loading model", 0);
-    rtextClient.loadModel((progress: rtext.ProgressInformation) => {
+    rtextClient.loadModel((progress: protocol.ProgressInformation) => {
         if ((progress.percentage != undefined) && (progress.message != undefined)) {
             progressReporter.report(progress.percentage, progress.message);
         }
@@ -41,16 +41,16 @@ async function provideDiagnostics() {
         data.problems.forEach((problem) => {
             const diagnostics: lsp.Diagnostic[] = [];
 
-            function convertSeverity(severity: rtext.ProblemSeverity): lsp.DiagnosticSeverity {
+            function convertSeverity(severity: protocol.ProblemSeverity): lsp.DiagnosticSeverity {
                 switch (severity) {
-                    case rtext.ProblemSeverity.debug:
+                    case protocol.ProblemSeverity.debug:
                         return lsp.DiagnosticSeverity.Hint;
-                    case rtext.ProblemSeverity.error:
-                    case rtext.ProblemSeverity.fatal:
+                    case protocol.ProblemSeverity.error:
+                    case protocol.ProblemSeverity.fatal:
                         return lsp.DiagnosticSeverity.Error;
-                    case rtext.ProblemSeverity.warn:
+                    case protocol.ProblemSeverity.warn:
                         return lsp.DiagnosticSeverity.Warning;
-                    case rtext.ProblemSeverity.info:
+                    case protocol.ProblemSeverity.info:
                         return lsp.DiagnosticSeverity.Information;
                     default:
                         //@todo assert
@@ -83,18 +83,18 @@ async function provideDiagnostics() {
     }).finally(() => { progressReporter.done(); });
 }
 
-function extractContext(document: TextDocument, position: lsp.Position): Context {
+function extractContext(document: TextDocument, position: lsp.Position): context.Context {
     const text = document.getText(lsp.Range.create(lsp.Position.create(0, 0), lsp.Position.create(position.line, Number.MAX_VALUE)));
     const lines = text.split('\n');
     const pos = position.character + 1; // column number start at 1 in RText protocol
-    return Context.extract(lines, pos);
+    return context.extract(lines, pos);
 }
 
 connection.onHover((params: lsp.TextDocumentPositionParams): Promise<lsp.Hover | null> | undefined => {
     const document = documents.get(params.textDocument.uri);
     if (document) {
         const ctx = extractContext(document, params.position);
-        return rtextClient.getContextInformation(ctx).then((response: rtext.ContextInformationResponse) => {
+        return rtextClient.getContextInformation(ctx).then((response: protocol.ContextInformationResponse) => {
             return { contents: response.desc };
         }).catch(error => {
             connection.console.error(error.message);
@@ -107,7 +107,7 @@ connection.onReferences((params: lsp.ReferenceParams): Promise<lsp.Location[] | 
     const document = documents.get(params.textDocument.uri);
     if (document) {
         const ctx = extractContext(document, params.position);
-        return rtextClient.getLinkTargets(ctx).then((response: rtext.LinkTargetsResponse) => {
+        return rtextClient.getLinkTargets(ctx).then((response: protocol.LinkTargetsResponse) => {
             const locations: lsp.Location[] = [];
             response.targets.forEach(target => {
                 const range = lsp.Range.create(
@@ -126,7 +126,7 @@ connection.onReferences((params: lsp.ReferenceParams): Promise<lsp.Location[] | 
 });
 
 connection.onWorkspaceSymbol((params: lsp.WorkspaceSymbolParams): Promise<lsp.SymbolInformation[] | null> | undefined => {
-    return rtextClient.findElements(params.query).then((response: rtext.FindElementsResponse) => {
+    return rtextClient.findElements(params.query).then((response: protocol.FindElementsResponse) => {
         const info: lsp.SymbolInformation[] = [];
         response.elements.forEach((e) => {
             info.push({
@@ -176,7 +176,7 @@ connection.onDocumentLinkResolve((link: lsp.DocumentLink): Promise<lsp.DocumentL
     const document = documents.get(link.data.textDocument.uri);
     if (document) {
         const ctx = extractContext(document, link.range.start);
-        return rtextClient.getLinkTargets(ctx).then((response: rtext.LinkTargetsResponse) => {
+        return rtextClient.getLinkTargets(ctx).then((response: protocol.LinkTargetsResponse) => {
             if (response.targets.length > 0) {
                 const target = response.targets[0];
                 const url = pathToFileURL(target.file);
@@ -224,7 +224,7 @@ connection.onCompletion((params: lsp.CompletionParams): Promise<lsp.CompletionIt
     const document = documents.get(params.textDocument.uri);
     if (document) {
         const ctx = extractContext(document, params.position);
-        return rtextClient.getContentCompletion(ctx).then((response: rtext.ContentCompleteResponse) => {
+        return rtextClient.getContentCompletion(ctx).then((response: protocol.ContentCompleteResponse) => {
             const items: lsp.CompletionItem[] = [];
             response.options.forEach((option) => {
                 items.push({
@@ -248,7 +248,7 @@ connection.onInitialize(async (params: lsp.InitializeParams): Promise<lsp.Initia
     connection.console.log(`[Server(${process.pid}) ${workspaceFolder}] Started and initialize received`);
 
     settings = params.initializationOptions;
-    rtextClient = new RTextClient(settings.rtextConfig);
+    rtextClient = new client.Client(settings.rtextConfig);
 
     return new Promise<lsp.InitializeResult>((resolve, reject) => {
         rtextClient.restart().then(() => {

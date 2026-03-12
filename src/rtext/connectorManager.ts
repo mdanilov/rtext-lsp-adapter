@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import * as crypto from 'crypto';
 
-import { Config, ServiceConfig } from './config'
+import { ServiceConfig, find_service_config, file_pattern } from './config'
 
 export interface ConnectorConstructor<T = unknown> {
-    new (config: ServiceConfig, data?: T): ConnectorInterface
+    new(config: ServiceConfig, data?: T): ConnectorInterface
 }
 
 export interface ConnectorInterface {
@@ -27,9 +27,9 @@ export class ConnectorManager<T = unknown> {
     }
 
     public connectorForFile(file: string, data?: T): ConnectorInterface | undefined {
-        const config = Config.find_service_config(file);
+        const config = find_service_config(file);
         if (config) {
-            const filePattern = Config.file_pattern(file);
+            const filePattern = file_pattern(file);
             const key = this.descKey(config, filePattern);
             const desc = this._connectorDescs.get(key);
             if (desc) {

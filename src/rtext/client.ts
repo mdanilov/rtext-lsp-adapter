@@ -4,13 +4,13 @@ import * as path from "path";
 import * as os from "os";
 import { clearInterval } from "timers";
 
-import * as rtextProtocol from "./protocol";
-import { Context } from "./context";
-import { Message } from "./message";
+import * as protocol from "./protocol";
+import * as context from "./context";
+import * as message from "./message";
 import { ServiceConfig } from "./config";
 import { ConnectorInterface } from "./connectorManager";
 
-export type ProgressCallback = (progress: rtextProtocol.ProgressInformation) => void;
+export type ProgressCallback = (progress: protocol.ProgressInformation) => void;
 
 class PendingRequest {
     public invocationId = 0;
@@ -98,19 +98,19 @@ export class Client implements ConnectorInterface {
         });
     }
 
-    public getContextInformation(context: Context): Promise<rtextProtocol.ContextInformationResponse> {
+    public getContextInformation(context: context.Context): Promise<protocol.ContextInformationResponse> {
         return this.send({ command: "context_info", context: context.lines, column: context.pos });
     }
 
-    public getContentCompletion(context: Context): Promise<rtextProtocol.ContentCompleteResponse> {
+    public getContentCompletion(context: context.Context): Promise<protocol.ContentCompleteResponse> {
         return this.send({ command: "content_complete", context: context.lines, column: context.pos });
     }
 
-    public getLinkTargets(context: Context): Promise<rtextProtocol.LinkTargetsResponse> {
+    public getLinkTargets(context: context.Context): Promise<protocol.LinkTargetsResponse> {
         return this.send({ command: "link_targets", context: context.lines, column: context.pos });
     }
 
-    public findElements(pattern: string): Promise<rtextProtocol.FindElementsResponse> {
+    public findElements(pattern: string): Promise<protocol.FindElementsResponse> {
         return this.send({ command: "find_elements", search_pattern: pattern });
     }
 
@@ -158,13 +158,13 @@ export class Client implements ConnectorInterface {
                     process.kill(childProcess.pid, 0);
                     childProcess.kill('SIGKILL');
                 }
-            } catch (error) {
+            } catch {
                 // All is fine.
             }
         }, 2000);
     }
 
-    public loadModel(progressCallback?: ProgressCallback): Promise<rtextProtocol.LoadModelResponse> {
+    public loadModel(progressCallback?: ProgressCallback): Promise<protocol.LoadModelResponse> {
         return this.send({ command: "load_model" }, progressCallback);
     }
 
@@ -172,7 +172,7 @@ export class Client implements ConnectorInterface {
         return this.send({ command: "stop" });
     }
 
-    public getVersion(): Promise<rtextProtocol.VersionResponse> {
+    public getVersion(): Promise<protocol.VersionResponse> {
         return this.send({ command: "version" });
     }
 
@@ -193,7 +193,7 @@ export class Client implements ConnectorInterface {
         request.command = data.command;
         this._pendingRequests.push(request);
 
-        const payload = Message.serialize(data);
+        const payload = message.serialize(data);
 
         this._client.write(payload);
         this._invocationCounter++;
@@ -217,7 +217,7 @@ export class Client implements ConnectorInterface {
         this._connected = false;
         console.log("Connection closed");
 
-        for (let request of this._pendingRequests) {
+        for (const request of this._pendingRequests) {
             if (request.rejectFunc) {
                 request.rejectFunc(new Error('RText service connection closed'));
             }
@@ -236,7 +236,7 @@ export class Client implements ConnectorInterface {
     private onData(data: any) {
         this._responseData = Buffer.concat([this._responseData, data], this._responseData.length + data.length);
         let obj: any;
-        while (obj = Message.extract(this._responseData)) {
+        while (obj = message.extract(this._responseData)) {
             this._responseData = this._responseData.slice(obj._dataLength);
             console.debug("Rx: " + JSON.stringify(obj));
 
@@ -266,7 +266,7 @@ export class Client implements ConnectorInterface {
     }
 
     private transformCommand(command: string): string {
-        let m = command.match(/^cmd\s*\/c\s*/);
+        const m = command.match(/^cmd\s*\/c\s*/);
         if (m && os.platform() !== 'win32') {
             command = command.substring(m[0].length);
         }
@@ -289,7 +289,7 @@ export class Client implements ConnectorInterface {
                 reject(new Error(`Launching server using command ${this.config.command} failed.`));
             }
             this._serverProcess = serverProcess;
-            serverProcess.on('exit', (code, signal) => {
+            serverProcess.on('exit', () => {
                 if (this._state === ClientState.Starting) {
                     reject(new Error(`Launching server using command ${this.config.command} failed.`));
                 }
