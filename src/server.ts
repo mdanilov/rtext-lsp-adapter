@@ -83,10 +83,9 @@ async function provideDiagnostics() {
     }).finally(() => { progressReporter.done(); });
 }
 
-function extractContext(document: TextDocument, position: any): Context {
+function extractContext(document: TextDocument, position: lsp.Position): Context {
     const text = document.getText(lsp.Range.create(lsp.Position.create(0, 0), lsp.Position.create(position.line, Number.MAX_VALUE)));
     const lines = text.split('\n');
-    lines.pop(); // remove last `\n` added by getText
     const pos = position.character + 1; // column number start at 1 in RText protocol
     return Context.extract(lines, pos);
 }
@@ -109,7 +108,7 @@ connection.onReferences((params: lsp.ReferenceParams): Promise<lsp.Location[] | 
     if (document) {
         const ctx = extractContext(document, params.position);
         return rtextClient.getLinkTargets(ctx).then((response: rtext.LinkTargetsResponse) => {
-            let locations: lsp.Location[] = [];
+            const locations: lsp.Location[] = [];
             response.targets.forEach(target => {
                 const range = lsp.Range.create(
                     lsp.Position.create(target.line - 1, 0),
@@ -180,7 +179,7 @@ connection.onDocumentLinkResolve((link: lsp.DocumentLink): Promise<lsp.DocumentL
         return rtextClient.getLinkTargets(ctx).then((response: rtext.LinkTargetsResponse) => {
             if (response.targets.length > 0) {
                 const target = response.targets[0];
-                let url = pathToFileURL(target.file);
+                const url = pathToFileURL(target.file);
                 url.hash = target.line.toString();
                 link.target = url.toString();
             }

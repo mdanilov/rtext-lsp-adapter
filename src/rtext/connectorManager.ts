@@ -3,8 +3,8 @@ import * as crypto from 'crypto';
 
 import { Config, ServiceConfig } from './config'
 
-export interface ConnectorConstructor {
-    new (config: ServiceConfig, data?: any): ConnectorInterface
+export interface ConnectorConstructor<T = unknown> {
+    new (config: ServiceConfig, data?: T): ConnectorInterface
 }
 
 export interface ConnectorInterface {
@@ -18,15 +18,15 @@ interface ConnectorDesc {
     checksum?: string;
 }
 
-export class ConnectorManager {
+export class ConnectorManager<T = unknown> {
     private _connectorDescs: Map<string, ConnectorDesc> = new Map();
-    private _connectorCtor: ConnectorConstructor;
+    private _connectorCtor: ConnectorConstructor<T>;
 
-    constructor(ctor: ConnectorConstructor) {
+    constructor(ctor: ConnectorConstructor<T>) {
         this._connectorCtor = ctor;
     }
 
-    public connectorForFile(file: string, data?: any): ConnectorInterface | undefined {
+    public connectorForFile(file: string, data?: T): ConnectorInterface | undefined {
         const config = Config.find_service_config(file);
         if (config) {
             const filePattern = Config.file_pattern(file);
@@ -53,7 +53,7 @@ export class ConnectorManager {
         return cons;
     }
 
-    private createConnector(config: ServiceConfig, pattern: string, data?: any): ConnectorInterface {
+    private createConnector(config: ServiceConfig, pattern: string, data?: T): ConnectorInterface {
         const key = this.descKey(config, pattern);
         const con = new this._connectorCtor(config, data);
         const desc: ConnectorDesc = { connector: con, checksum: this.configChecksum(config) };
